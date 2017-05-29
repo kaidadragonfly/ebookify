@@ -221,8 +221,8 @@ def parse_chapter(book, url, ch_num):
     chapter_header = tag(book, 'div', '', {"class": 'ch-header'})
     book.body.append(chapter_header)
     chapter_header.append(
-        tag(book, 'span', ch_num))
-    chapter_title = tag(book, 'h2', id=title_id)
+        tag(book, 'span', ch_num, id=title_id))
+    chapter_title = tag(book, 'h2')
     chapter_title.append(tag(book, 'a', title, href=url))
     chapter_header.append(chapter_title)
     chapter_header.append(
