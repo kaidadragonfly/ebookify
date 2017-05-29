@@ -245,7 +245,9 @@ def parse_child(book, children, child, author):
 
     if child.text:
         text = child.text.lower()
-        if 'previous story: ' in text or 'plane profile' in text:
+        if 'previous story: ' in text \
+           or 'previous episode: ' in text \
+           or 'planeswalker profile' in text:
             return author
 
     for img in child.find_all('img'):
