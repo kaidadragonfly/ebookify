@@ -6,6 +6,8 @@ into an ebook version of the Magic story.
 Dependencies:
   pip install requests bs4 lxml
 """
+from hashlib import sha1
+
 import os
 import sys
 import argparse
@@ -72,9 +74,10 @@ def main():
     htmlfile = args.json.replace('.json', '.html')
     ncxfile = args.json.replace('.json', '.ncx')
     opffile = args.json.replace('.json', '.opf')
+    images = []                 # Parsers will append to this.
 
     for url, idx in zip(urls, range(len(urls))):
-        parse_chapter(book, url, idx + 1)
+        parse_chapter(book, url, idx + 1, images)
 
     with open(htmlfile, 'wb') as outfile:
         outfile.write(book.prettify().encode('utf-8'))
@@ -85,12 +88,22 @@ def main():
 
     with open(opffile, 'wb') as outfile:
         outfile.write(
-            create_opf(book, htmlfile, ncxfile).encode('utf-8'))
+            create_opf(book, htmlfile, ncxfile, images).encode('utf-8'))
 
-def create_opf(book, htmlfile, ncxfile):
+def create_opf(book, htmlfile, ncxfile, images):
     """
     Create the top level file to tie some of the pieces together.
     """
+
+    str_images = set([
+        '<item id="{}" href="{}" media-type="images/jpeg" />'.format(
+            sha1(img['src']).hexdigest(),
+            img['src'])
+        for img
+        in images
+    ])
+
+    # For some reason BeautifulSoup won't generate this correctly...
     return """
     <?xml version="1.0" encoding="utf-8"?>
     <package unique-identifier="{title}" xmlns:asd="http://www.idpf.org/asdfaf" xmlns:opf="http://www.idpf.org/2007/opf">
@@ -107,6 +120,7 @@ def create_opf(book, htmlfile, ncxfile):
         <item id="stylesheet" href="style.css" media-type="text/css"/>
         <item href="{ncxfile}" id="ncx" media-type="application/x-dtbncx+xml"/>
         <item id="cover-image" href="cover.jpg" media-type="image/jpeg" />
+        {images}
       </manifest>
       <spine toc="ncx">
         <itemref idref="book" />
@@ -119,7 +133,8 @@ def create_opf(book, htmlfile, ncxfile):
     """.format(
         title=book.title.text,
         htmlfile=htmlfile,
-        ncxfile=ncxfile)
+        ncxfile=ncxfile,
+        images="\n        ".join(str_images))
 
 def create_ncx_toc(book, htmlfile):
     """
@@ -193,7 +208,7 @@ def get_cached(url, binary=False):
 
     return response
 
-def parse_chapter(book, url, ch_num):
+def parse_chapter(book, url, ch_num, images):
     """
     Parse an individual chapter into the book.
     """
@@ -209,7 +224,7 @@ def parse_chapter(book, url, ch_num):
     children = []
 
     for child in content.children:
-        author = parse_child(book, children, child, author)
+        author = parse_child(book, children, child, author, images)
 
     if children[-1].name == 'hr':
         children = children[0:-1]
@@ -231,16 +246,18 @@ def parse_chapter(book, url, ch_num):
     for child in children:
         book.body.append(child)
 
-def parse_child(book, children, child, author):
+def parse_child(book, children, child, author, images):
     """
     Parse out an individual child element.
     """
+
     if not child.name:
         return author
 
     if child.string and 'Stories written by' in child.string:
         author = child.string.replace('Stories written by', 'By')
         author = re.sub(r'[.]$', '', author)
+
         return author
 
     if child.text:
@@ -248,6 +265,7 @@ def parse_child(book, children, child, author):
         if 'previous story: ' in text \
            or 'previous episode: ' in text \
            or 'planeswalker profile' in text:
+
             return author
 
     for img in child.find_all('img'):
@@ -255,11 +273,15 @@ def parse_child(book, children, child, author):
         src = get_cached(img['src'], binary=True)
         img['src'] = src
 
+        images.append(img)
+
     if child.name == 'div':
         fig = child.find('figure')
         if fig:
             cap = fig.find('figcaption').text
+            img = fig.find('img')
             illustration = tag(book, 'div', '', {"class": "illustration"})
+            illustration.append(img)
             illustration.append(tag(book, 'span', cap))
             children.append(illustration)
 
