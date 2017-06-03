@@ -80,7 +80,7 @@ def main():
         parse_chapter(book, url, idx + 1, images)
 
     with open(htmlfile, 'wb') as outfile:
-        outfile.write(book.prettify().encode('utf-8'))
+        outfile.write(book.encode('utf-8'))
 
     with open(ncxfile, 'wb') as outfile:
         outfile.write(
