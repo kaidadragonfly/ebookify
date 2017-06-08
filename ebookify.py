@@ -285,7 +285,7 @@ def parse_child(book, children, child, author, images):
             illustration.append(tag(book, 'span', cap))
             children.append(illustration)
 
-    if child.name in ['p', 'hr']:
+    if child.name in ['p', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
         children.append(child)
 
     return author
