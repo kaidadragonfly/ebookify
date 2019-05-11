@@ -41,13 +41,16 @@ def main():
         config = json.loads(file.read())
         set_name = config['expansion']
         urls = [str(u) for u in config['urls']]
+        title = set_name + ': Collected Stories'
+        if ':' in set_name:
+            title = set_name + ' (Collected Stories)'
 
     book = BeautifulSoup("""
     <!DOCTYPE html>
     <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
       <head>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-        <title>{set_name}: Collected Stories</title>
+        <title>{title}</title>
         <link rel="stylesheet" href="style.css"  type="text/css" />
       </head>
       <body>
@@ -69,15 +72,20 @@ def main():
         </div>
       </body>
     </html>
-    """.format(set_name=set_name), 'html.parser')
+    """.format(set_name=set_name, title=title), 'html.parser')
 
-    htmlfile = args.json.replace('.json', '.html')
-    ncxfile = args.json.replace('.json', '.ncx')
-    opffile = args.json.replace('.json', '.opf')
+    basename = args.json.replace('.json', '')
+    htmlfile = basename + '.html'
+    ncxfile = basename + '.ncx'
+    opffile = basename + '.opf'
+    coverfile = basename + '-cover.jpg'
+    if not os.path.isfile(coverfile):
+        coverfile = 'cover.jpg'
+
     images = []                 # Parsers will append to this.
 
     for url, idx in zip(urls, range(len(urls))):
-        parse_chapter(book, url, idx + 1, images)
+        parse_chapter(book, url, set_name, idx + 1, images)
 
     with open(htmlfile, 'wb') as outfile:
         outfile.write(book.encode('utf-8'))
@@ -88,9 +96,10 @@ def main():
 
     with open(opffile, 'wb') as outfile:
         outfile.write(
-            create_opf(book, htmlfile, ncxfile, images).encode('utf-8'))
+            create_opf(
+                book, htmlfile, ncxfile, coverfile, images).encode('utf-8'))
 
-def create_opf(book, htmlfile, ncxfile, images):
+def create_opf(book, htmlfile, ncxfile, coverfile, images):
     """
     Create the top level file to tie some of the pieces together.
     """
@@ -119,21 +128,22 @@ def create_opf(book, htmlfile, ncxfile, images):
         <item id="book" href="{htmlfile}" media-type="application/xhtml+xml"/>
         <item id="stylesheet" href="style.css" media-type="text/css"/>
         <item href="{ncxfile}" id="ncx" media-type="application/x-dtbncx+xml"/>
-        <item id="cover-image" href="cover.jpg" media-type="image/jpeg" />
+        <item id="cover-image" href="{coverfile}" media-type="image/jpeg" />
         {images}
       </manifest>
       <spine toc="ncx">
         <itemref idref="book" />
       </spine>
       <guide>
-        <reference href="aer.html#table-of-contents" title="Table of Contents" type="toc"/>
-        <reference href="aer.html" title="Beginning" type="text"/>
+        <reference href="{htmlfile}#table-of-contents" title="Table of Contents" type="toc"/>
+        <reference href="{htmlfile}" title="Beginning" type="text"/>
       </guide>
     </package>
     """.format(
         title=book.title.text,
         htmlfile=htmlfile,
         ncxfile=ncxfile,
+        coverfile=coverfile,
         images="\n        ".join(str_images))
 
 def create_ncx_toc(book, htmlfile):
@@ -173,7 +183,10 @@ def create_ncx_toc(book, htmlfile):
             label.append(tag(toc, 'text', link.text))
             point.append(label)
             point.append(
-                tag(toc, 'content', '', src="{}#{}".format(htmlfile, ch_id)))
+                tag(toc,
+                    'content',
+                    '',
+                    src="{}#{}".format(htmlfile, ch_id)))
             nav_map.append(point)
 
     return toc
@@ -208,13 +221,16 @@ def get_cached(url, binary=False):
 
     return response
 
-def parse_chapter(book, url, ch_num, images):
+def parse_chapter(book, url, set_name, ch_num, images):
     """
     Parse an individual chapter into the book.
     """
     html = BeautifulSoup(get_cached(url), 'html.parser')
 
     title = re.sub(r' \| [^|]*', '', html.title.string)
+    title = title.replace(set_name, '')
+    title = re.sub(u'^\u2014', '', title)
+
     title_id = title.replace(' ', '-').lower()
 
     author = html.find_all('div', class_='author')[0].find('p').string

@@ -5,3 +5,4 @@ KindleGen*
 *.json
 *.ncx
 *.opf
+*-cover.jpg
