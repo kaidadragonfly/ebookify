@@ -229,7 +229,8 @@ def parse_chapter(book, url, set_name, ch_num, images):
 
     title = re.sub(r' \| [^|]*', '', html.title.string)
     title = title.replace(set_name, '')
-    title = re.sub(u'^\u2014', '', title)
+    title = title.strip()
+    title = re.sub(u'^[\u2014\u2013]', '', title)
     title = title.strip()
     title_id = title.replace(' ', '-').lower()
 
