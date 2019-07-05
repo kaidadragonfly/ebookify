@@ -8,17 +8,21 @@ Dependencies:
 """
 from hashlib import sha1
 
-import os
-import sys
 import argparse
 import json
+import logging
+import os
 import re
+import sys
+
 import requests
 
 from bs4 import BeautifulSoup
 
+logging.basicConfig(format='%(message)s')
+
 if 'unicode' not in dir(__builtins__):
-    unicode = str # pylint: disable=invalid-name
+    unicode = str # pylint: disable=invalid-name,redefined-builtin
 
 REALPATH = os.path.realpath(sys.argv[0])
 ROOTPATH = os.path.dirname(REALPATH)
@@ -37,13 +41,8 @@ def main():
         type=str,
         help="A JSON file specifying titles and URLs")
     args = parser.parse_args()
-    with open(args.json) as file:
-        config = json.loads(file.read())
-        set_name = config['expansion']
-        urls = [str(u) for u in config['urls']]
-        title = set_name + ': Collected Stories'
-        if ':' in set_name:
-            title = set_name + ' (Collected Stories)'
+
+    expansion, title, urls, emails = parse_config(args.json)
 
     book = BeautifulSoup("""
     <!DOCTYPE html>
@@ -55,7 +54,7 @@ def main():
       </head>
       <body>
         <div id="title-page">
-          <h1>{set_name}</h1>
+          <h1>{expansion}</h1>
           <span>Collected Stories</span>
           <div id="disclaimer">
             <strong>Disclaimer</strong>
@@ -72,7 +71,7 @@ def main():
         </div>
       </body>
     </html>
-    """.format(set_name=set_name, title=title), 'html.parser')
+    """.format(expansion=expansion, title=title), 'html.parser')
 
     basename = args.json.replace('.json', '')
     htmlfile = basename + '.html'
@@ -85,7 +84,7 @@ def main():
     images = []                 # Parsers will append to this.
 
     for url, idx in zip(urls, range(len(urls))):
-        parse_chapter(book, url, set_name, idx + 1, images)
+        parse_chapter_from_url(book, url, expansion, idx + 1, images)
 
     with open(htmlfile, 'wb') as outfile:
         outfile.write(book.encode('utf-8'))
@@ -98,6 +97,36 @@ def main():
         outfile.write(
             create_opf(
                 book, htmlfile, ncxfile, coverfile, images).encode('utf-8'))
+
+def parse_config(filename):
+    """
+    Parse configuration from json file.
+    """
+    error = False
+
+    with open(filename) as raw_config:
+        parsed = json.loads(raw_config.read())
+        expansion = parsed.get('expansion', "")
+        urls = [str(u) for u in parsed.get('urls', [])]
+        emails = [str(u) for u in parsed.get('emails', [])]
+
+        if ':' in expansion:
+            title = expansion + ' (Collected Stories)'
+        else:
+            title = expansion + ': Collected Stories'
+
+    if not expansion:
+        logging.error("No expansion provided in %s", filename)
+        error = True
+
+    if not (urls or emails):
+        logging.error("No urls or emails provided in %s", filename)
+        error = True
+
+    if error:
+        exit(1)
+    else:
+        return (expansion, title, urls, emails)
 
 def create_opf(book, htmlfile, ncxfile, coverfile, images):
     """
@@ -221,14 +250,14 @@ def get_cached(url, binary=False):
 
     return response
 
-def parse_chapter(book, url, set_name, ch_num, images):
+def parse_chapter_from_url(book, url, expansion, ch_num, images):
     """
     Parse an individual chapter into the book.
     """
     html = BeautifulSoup(get_cached(url), 'html.parser')
 
     title = re.sub(r' \| [^|]*', '', html.title.string)
-    title = title.replace(set_name, '')
+    title = title.replace(expansion, '')
     title = title.strip()
     title = re.sub(u'^[\u2014\u2013]', '', title)
     title = title.strip()
