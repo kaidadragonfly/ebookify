@@ -1,8 +1,5 @@
 .cache/
 KindleGen*
-*.html
 *.mobi
 *.json
-*.ncx
-*.opf
 *-cover.jpg

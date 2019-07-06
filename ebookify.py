@@ -27,9 +27,13 @@ if 'unicode' not in dir(__builtins__):
 REALPATH = os.path.realpath(sys.argv[0])
 ROOTPATH = os.path.dirname(REALPATH)
 CACHEPATH = os.path.join(ROOTPATH, '.cache')
+OUTPATH = os.path.join(CACHEPATH, 'out')
 
 if not os.path.exists(CACHEPATH):
     os.makedirs(CACHEPATH)
+
+if not os.path.exists(OUTPATH):
+    os.makedirs(OUTPATH)
 
 def main():
     "Entry point!"
@@ -74,10 +78,13 @@ def main():
     """.format(expansion=expansion, title=title), 'html.parser')
 
     basename = args.json.replace('.json', '')
-    htmlfile = basename + '.html'
-    ncxfile = basename + '.ncx'
-    opffile = basename + '.opf'
     coverfile = basename + '-cover.jpg'
+
+    output_basename = os.path.join(OUTPATH, basename)
+    htmlfile = output_basename + '.html'
+    ncxfile = output_basename + '.ncx'
+    opffile = output_basename + '.opf'
+
     if not os.path.isfile(coverfile):
         coverfile = 'cover.jpg'
 
